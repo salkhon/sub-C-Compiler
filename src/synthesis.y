@@ -67,7 +67,7 @@
     void write_code(const string&, int=0);
     void write_code(const vector<string>&, int=0);
     void append_print_proc_def_to_codefile();
-    void prepend_data_segment_to_codefile();
+    void structure_main_asm_codefile();
     void copy_txt_file(ifstream& from_file, ofstream& to_file);
 
     void peephole_optimization();
@@ -145,21 +145,6 @@ unit:
     }
     ;
 
-/**
-    A -> B {} C {}
-    Midrule semantic actions are rewritten as:
-    T -> %empty {}
-    A -> B T C {}
-    Which means the action code of T -> %empty {} will execute before A -> B T C {} is executed. 
-    It simulates inheritted attribute semantic actions. 
-    Practically it just breaks the production into two separate productions. 
-**/
-
-/**
-    Func declarations are used for type analysis. But for code generation they are useless. Because in an error 
-    free code, you can allocate function frame from the number of arguments. Plus their is only one type INT. 
-    So args are PUSHED arg_size times. So no need to insert function symbols into symbol table. 
-**/
 func_declaration: 
     func_signature SEMICOLON {
         delete current_func_sym_ptr;
@@ -168,20 +153,11 @@ func_declaration:
     }
     ;
 
-/**
-    function call needs to push base pointer, and pop and set base pointer on return. 
-    Doing this on stack enables recursive calls. 
-    current_stack_pointer needn't be modified, because that's only relevant for code generation.
-**/
 func_definition:
     func_signature LCURL {
-        // symbol table insertions of parameters in new scope, var names are not available in calling sequence
-        // new BP is set at the top of func def. args were pushed before that BP. So, param offsets need to be positive, 
-        // if local offsets are negative. args are pushed from first to last, so offset will go from positive toward zero. 
         current_stack_offset = params_for_func_scope.size(); // offset 0 is for return IP, paramsize+1 is for old BP. 
         symbol_table.enter_scope();
         for (SymbolInfo* param_symbol : params_for_func_scope) {
-            // base pointer is reset on on every call, so identifying local vars based on offset works
             param_symbol->get_codegen_info_ptr()->set_is_local(true);
             param_symbol->get_codegen_info_ptr()->set_stack_offset(current_stack_offset--);
             insert_into_symtable(param_symbol);
@@ -197,7 +173,6 @@ func_definition:
         write_code(code, label_depth);
     } statements RCURL {
         if (current_func_sym_ptr->get_semantic_type() == VOID_TYPE) {
-            // void functions can end without explicit return statement
             vector<string> code = _get_activation_record_teardown_code();
             write_code(code, label_depth);
         }
@@ -259,15 +234,6 @@ compound_statement:
     }
     ;
 
-/**
-    LCURL can mean 2 things. Start of a function, or a nested scope. If it's a functions, current_func_sym_ptr
-    will have function signature. If so, write PROC code. 
-    If it's just a nested scope, no new frame. Means no new base ptr. We can use the old stack offset. Just create
-    new scope to refer to actual variables with proper offset. And the ability to declare same named variables as
-    the outer scope. 
-    To solve this, separate out nested scope and func_def in the grammar.
-**/
-
 var_declaration:
     type_specifier declaration_list SEMICOLON {
         delete $1;
@@ -304,41 +270,11 @@ statements:
     | statements statement {}
     ;
 
-/**
-    Surprisingly, this if-else grammar automatically covers if-elseif ladder. Because if-elseif ladders
-    can be broken down to nested if-else s.
-        if (A) {
-
-        } else if (B) {
-
-        } else if (C) {
-
-        } else {
-
-        }
-    To, 
-        if (A) {
-
-        } else {
-            if (B) {
-
-            } else {
-                if (C) {
-
-                } else {
-
-                }
-            }
-        }
-    If one of the if condition enters, no else-ifs enter. Amazing. 
-**/
 statement:
     var_declaration {}
     | expression_statement {}
     | compound_statement {}
     | FOR LPAREN expression_statement {
-        // expression code written, value stored on AX (assignment mostly)
-        // need label to comeback to following condition checking expression
         vector<string> code{
             "; FOR LOOP START", 
             get_label(FOR_LOOP_CONDITION) + ":"
@@ -348,7 +284,6 @@ statement:
 
         $<int_val>$ = label_count - 1; 
     } expression_statement {
-        // conditional statement value in AX, code written
         const int CURR_LABEL_ID = $<int_val>4;
         vector<string> code{
             "; FOR LOOP CONDITION CHECK",
@@ -361,7 +296,6 @@ statement:
 
         $<int_val>$ = $<int_val>4;
     } expression RPAREN {
-        // expression val in AX, mostly assignment
         const int CURR_LABEL_ID = $<int_val>6;
         vector<string> code{
             "JMP " + get_label(FOR_LOOP_CONDITION, CURR_LABEL_ID),
@@ -441,15 +375,12 @@ statement:
     }
     | RETURN expression SEMICOLON {
         vector<string> code = _get_activation_record_teardown_code();
-        // everything on the current scope is a parameter or a local, just pop x sizeof currentscope
         write_code(code, label_depth);
     }
     ;
 
 if_condition:
     IF LPAREN expression RPAREN {
-        // if_condition assumes if-else. If condition is false, jump to ELSE_BODY label, which will exist for
-        // if without else as a dummy. 
         vector<string> code{
             "; IF STATEMENT START",
             "CMP AX, 0", 
@@ -465,18 +396,6 @@ expression_statement:
     | expression SEMICOLON {}
     ;
 
-/**
-    variable can be global or local. Global is stored by name, can be called in x86 by name. Local has to 
-    be popped from the stack. So the stack offset would be it's identifier. 
-    If its local, put stack offset in x86, if its global put name in x86. 
-**/
-/**
-    expression value cannot be evaluated in compile time.
-    expression code needs to store result in AX. Since we know the latest expression value is in AX, 
-    if we need to store 2 expressions, we can just add a midrule code in the earlier expression to push
-    the AX val to stack.  
-    If you find variable from symbol table is an array, you can find it's index expression at AX. 
-**/
 variable:
     ID {
         // can be l value or r value - so not resolving now, just inheritting symbol name to find in sym table.
@@ -508,8 +427,6 @@ expression:
 logic_expression:
     rel_expression {}
     | rel_expression LOGICOP {
-        // make expression value persist
-        // AFTER EACH EXPRESSION part, STACK NEEDS TO BE AS IT WAS BEFORE. That way current_stack_offset needn't be changed
         vector<string> code;
 
         if ($2->get_symbol() == "&&") {
@@ -753,7 +670,7 @@ int main(int argc, char* argv[]) {
     fclose(input_file);
     code_file.close();
 
-    prepend_data_segment_to_codefile();
+    structure_main_asm_codefile();
     peephole_optimization();
 
     return 0;
@@ -962,7 +879,7 @@ void write_code(const vector<string>& code, int indentation) {
     }
 }
 
-void prepend_data_segment_to_codefile() {
+void structure_main_asm_codefile() {
     // open actual code file for writing
     code_file.open(CODE_FILE_NAME);
 
@@ -1096,8 +1013,6 @@ void do_peephole(vector<string>& all_code) {
         trim(curr_line); // preserving original indentation on all_code
         trim(prev_line);
 
-        /* cout << i << " - " << prev_line << " - " << curr_line << endl; */
-
         if (starts_with("JMP", curr_line) || starts_with("RET", curr_line)) {
             // skip until next label, or end of function
             i++;
@@ -1211,8 +1126,3 @@ vector<string> load_code_into_mem() {
     code_file.close();
     return all_code;
 }
-
-/**
-    x86 assembly instructions: http://www.mathemainzel.info/files/x86asmref.html#idiv
-    x86 assembly registers: https://www.eecg.utoronto.ca/~amza/www.mindsec.com/files/x86regs.html#:~:text=The%20main%20tools%20to%20write,the%20process%20faster%20and%20cleaner.
-**/
