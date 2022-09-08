@@ -10,7 +10,7 @@
     #include <stdlib.h>
     #include <cstring>
     #include "./symbol-table/include.hpp"
-    #include "analysis.tab.h"
+    #include "subcc.tab.h"
 
     using namespace std;
 
@@ -205,7 +205,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token = string("<") + token_type + ", " + symbol + ">";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return CONST_INT;
 }
@@ -216,7 +216,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token = string("<") + token_type + ", " + symbol + ">";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return CONST_FLOAT;
 }
@@ -381,7 +381,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "ADDOP";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return ADDOP;
 }
@@ -391,7 +391,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "MULOP";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return MULOP;
 }
@@ -417,7 +417,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "RELOP";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return RELOP;
 }
@@ -435,7 +435,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "LOGICOP";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return LOGICOP;
 }
@@ -445,7 +445,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "NOT";
     write_token_and_log_lex(token_type, symbol, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return NOT;
 }
@@ -529,7 +529,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token = string("<") + token_type + ", " + symbol + ">";
     write_token_and_log_lex(token_type, symbol, string(yytext));
    
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
+    yylval.SymPtr = new SymbolInfo(symbol, token_type);
 
     return ID;
 }

@@ -1,17 +1,16 @@
 cd ./src/
-bison -d analysis.y
-g++ -w -c analysis.tab.c
+bison -d subcc.y
+g++ -w -c subcc.tab.c
 
-flex -o analysis.yy.c analysis.l
-g++ -w -c analysis.yy.c
+flex -o subcc.yy.c subcc.l
+g++ -w -c subcc.yy.c
 
-g++ analysis.tab.o analysis.yy.o \
+g++ subcc.tab.o subcc.yy.o \
     ./symbol-table/ScopeTable/ScopeTable.cpp \
     ./symbol-table/ScopeTable/SymbolInfoHashTable/SymbolInfoHashTable.cpp \
     ./symbol-table/SymbolInfo/SymbolInfo.cpp \
     ./symbol-table/SymbolTable/SymbolTable.cpp \
     ./symbol-table/SymbolInfo/CodeGenInfo/CodeGenInfo.cpp \
-    -o analysis.out
-./analysis.out "$1"
+    -o ./../subcc.out
 
-rm *.out *.c *.h *.o log.txt
+rm *.c *.h *.o
